@@ -1,0 +1,316 @@
+<!DOCTYPE html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenMoHAA Web Port</title>
+<style>
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: rgb(0, 0, 0); display:flex; align-items: center; justify-content: center; }
+canvas { position: relative; z-index: 0; max-width: 100%; max-height: 100%; min-width: 100%; min-height: 100%; object-fit: contain; }
+canvas.dragging-look { cursor: none; }
+#mouse-lock-prompt { position: fixed; z-index: 2147483647; margin: auto; padding: 0; border: 0; max-width: none; max-height: none; overflow: visible; background: transparent; color: white; font: 16px system-ui, sans-serif; text-align: center; text-shadow: 0 1px 3px black; }
+#mouse-lock-prompt::backdrop { background: #0005; }
+#mouse-lock-panel { width: min(34rem, 88vw); box-sizing: border-box; padding: 1.25rem; border: 1px solid #aaa; border-radius: 8px; background: #111e; box-shadow: 0 8px 32px #000c; }
+#mouse-lock-actions { display: flex; justify-content: center; gap: 0.75rem; margin-top: 1rem; }
+#mouse-lock-actions button { border: 1px solid #bbb; border-radius: 6px; padding: 0.75rem 1rem; background: #222; color: white; font: inherit; cursor: pointer; }
+#mouse-lock-actions button:hover { background: #444; }
+#mouse-lock-help { margin: 0; font-size: 13px; }
+#asset-download { position: fixed; z-index: 2147483646; left: 50%; bottom: 1rem; transform: translateX(-50%); width: min(34rem, 88vw); box-sizing: border-box; padding: .75rem 1rem; border: 1px solid #aaa; border-radius: 8px; background: #111e; color: white; font: 14px system-ui, sans-serif; text-align: center; text-shadow: 0 1px 3px black; }
+#asset-download[hidden] { display: none; }
+#asset-progress { display: block; width: 100%; height: .8rem; margin-top: .45rem; }
+</style>
+
+<canvas id=canvas tabindex="0" aria-label="OpenMoHAA game"></canvas>
+<dialog id="mouse-lock-prompt" aria-live="polite">
+  <section id="mouse-lock-panel">
+    <button id="mouse-lock-button" type="button">Click to start and lock mouse</button>
+    <p id="mouse-lock-help">Checking browser save storage… Click captures the mouse and enables sound; Esc releases it.</p>
+    <div id="mouse-lock-actions">
+      <button id="exit-game-button" type="button">Exit game</button>
+    </div>
+  </section>
+</dialog>
+<div id="asset-download" role="status" aria-live="polite" hidden>
+  <span id="asset-download-label">Downloading game audio…</span>
+  <progress id="asset-progress"></progress>
+</div>
+
+<script type=module>
+// These strings are set in the generated HTML file in the build directory.
+const CLIENT_NAME = 'openmohaa';
+const BASEGAME = 'main';
+const EMSCRIPTEN_PRELOAD_FILE = 'OFF' === 'ON';
+
+// Path or URL containing the client engine .js, .wasm, and possibly .data.
+let enginePath = './';
+// Path or URL containing fs_game directories.
+let dataPath = './';
+// Path or URL for config file that specifies the files to load for each fs_game.
+let configFilename = `./${CLIENT_NAME}-config.json`;
+
+if (window.location.protocol === 'file:') throw new Error('This game needs a local web server. Run Run Web Port.bat from the project folder, then use the browser tab it opens.');
+
+// First set up the command line arguments and the Emscripten filesystem.
+const urlParams = new URLSearchParams(window.location.search);
+const com_basegame = urlParams.get('com_basegame') || BASEGAME;
+const fs_basegame = urlParams.get('fs_basegame') || '';
+const fs_game = urlParams.get('fs_game') || '';
+let generatedArguments = `
+    +set sv_pure 0
+    +set net_enabled 0
+    +set r_mode 11
+    +set com_basegame "${com_basegame}"
+    +set fs_basegame "${fs_basegame}"
+    +set fs_game "${fs_game}"
+    +set fs_homepath /persistent
+`;
+// Note that unfortunately "+" needs to be encoded as "%2b" in URL query strings or it will be stripped by the browser.
+const queryArgs = urlParams.get('args');
+if (queryArgs) generatedArguments += ` ${queryArgs} `;
+
+const dataURL = new URL(dataPath, location.origin + location.pathname);
+
+const configPromise = EMSCRIPTEN_PRELOAD_FILE ? Promise.resolve({[BASEGAME]: {files: []}})
+  : fetch(configFilename, {cache: 'no-store'}).then(r => r.ok ? r.json() : { /* empty config */ });
+
+const mouseLockPrompt = document.getElementById('mouse-lock-prompt');
+const mouseLockButton = document.getElementById('mouse-lock-button');
+const mouseLockHelp = document.getElementById('mouse-lock-help');
+const exitGameButton = document.getElementById('exit-game-button');
+const assetDownload = document.getElementById('asset-download');
+const assetDownloadLabel = document.getElementById('asset-download-label');
+const assetProgress = document.getElementById('asset-progress');
+let runtimeModule = null;
+let startRequested = false;
+let waitingForGesture = true;
+let persistentStorageEnabled = null;
+let pointerLockBlocked = false;
+let continueWithoutMouseCapture = false;
+window.openmohaaPointerLockBlocked = false;
+
+function updateMouseLockPrompt() {
+    const locked = document.pointerLockElement === canvas;
+    const canCaptureMouse = typeof canvas.requestPointerLock === 'function';
+    const shouldShowPrompt = !locked && !continueWithoutMouseCapture;
+    if (shouldShowPrompt && !mouseLockPrompt.open) mouseLockPrompt.showModal();
+    if (!shouldShowPrompt && mouseLockPrompt.open) mouseLockPrompt.close();
+    mouseLockButton.textContent = pointerLockBlocked
+        ? 'Continue without mouse capture'
+        : startRequested
+            ? (canCaptureMouse ? 'Click to capture mouse' : 'Continue without mouse capture')
+            : (canCaptureMouse ? 'Click to start and capture mouse' : 'Start game');
+    const saveHelp = persistentStorageEnabled === true
+        ? 'Saves stay in this browser.'
+        : persistentStorageEnabled === false
+            ? 'Browser save storage is unavailable; saves may not survive reloads.'
+            : 'Checking browser save storage…';
+    const mouseHelp = pointerLockBlocked || !canCaptureMouse
+        ? 'Mouse capture is blocked here. Move the mouse to look; hold and drag to keep moving past the game edge.'
+        : 'Click captures the mouse and enables sound; Esc releases it.';
+    mouseLockHelp.textContent = `${saveHelp} ${mouseHelp}`;
+}
+
+function updateAssetProgress(loaded, total) {
+    assetDownload.hidden = false;
+    if (total > 0) {
+        const percent = Math.min(100, Math.floor(loaded * 100 / total));
+        assetProgress.max = 100;
+        assetProgress.value = percent;
+        assetDownloadLabel.textContent = `Downloading game audio: ${percent}% (${(loaded / 1048576).toFixed(0)} / ${(total / 1048576).toFixed(0)} MB)`;
+    } else {
+        assetProgress.removeAttribute('value');
+        assetDownloadLabel.textContent = `Downloading game audio: ${(loaded / 1048576).toFixed(0)} MB`;
+    }
+}
+
+document.addEventListener('pointerlockchange', updateMouseLockPrompt);
+document.addEventListener('pointerlockerror', () => {
+    pointerLockBlocked = true;
+    window.openmohaaPointerLockBlocked = true;
+    updateMouseLockPrompt();
+});
+document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement === canvas) {
+        pointerLockBlocked = false;
+        window.openmohaaPointerLockBlocked = false;
+    }
+});
+canvas.addEventListener('pointerdown', event => {
+    if (!pointerLockBlocked || document.pointerLockElement === canvas) return;
+    try {
+        canvas.setPointerCapture(event.pointerId);
+        canvas.classList.add('dragging-look');
+    } catch (_) {}
+});
+function releaseDragLook(event) {
+    if (canvas.hasPointerCapture?.(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+    }
+    canvas.classList.remove('dragging-look');
+}
+canvas.addEventListener('pointerup', releaseDragLook);
+canvas.addEventListener('pointercancel', releaseDragLook);
+mouseLockPrompt.addEventListener('cancel', event => {
+    event.preventDefault();
+    continueWithoutMouseCapture = true;
+    updateMouseLockPrompt();
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+});
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+
+    // Escape must release browser capture even if the game is also opening its menu.
+    continueWithoutMouseCapture = true;
+    updateMouseLockPrompt();
+    if (document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+    }
+    if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen();
+    }
+}, true);
+updateMouseLockPrompt();
+exitGameButton.addEventListener('click', () => {
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+    if (window.history.length > 1) window.history.back();
+    else window.location.replace('about:blank');
+});
+mouseLockButton.addEventListener('click', () => {
+    if (startRequested && pointerLockBlocked) {
+        continueWithoutMouseCapture = true;
+        updateMouseLockPrompt();
+        canvas.focus();
+        return;
+    }
+
+    startRequested = true;
+    continueWithoutMouseCapture = false;
+    updateMouseLockPrompt();
+
+    // Keep this call directly in the click handler: browsers require a user gesture.
+    try {
+        if (typeof canvas.requestPointerLock !== 'function') {
+            pointerLockBlocked = true;
+            window.openmohaaPointerLockBlocked = true;
+            updateMouseLockPrompt();
+        } else {
+            pointerLockBlocked = false;
+            const result = canvas.requestPointerLock();
+            if (result && typeof result.catch === 'function') {
+                result.catch(() => {
+                    pointerLockBlocked = true;
+                    window.openmohaaPointerLockBlocked = true;
+                    updateMouseLockPrompt();
+                });
+            }
+        }
+    } catch (error) {
+        pointerLockBlocked = true;
+        window.openmohaaPointerLockBlocked = true;
+        updateMouseLockPrompt();
+    }
+
+    // Starting after a user click also lets browser audio policies unlock Web Audio.
+    if (runtimeModule && waitingForGesture) {
+        waitingForGesture = false;
+        runtimeModule.removeRunDependency('wait-for-user-gesture');
+    }
+});
+
+const engineCacheBust = String(Date.now());
+const ioquake3 = (await import(enginePath + `openmohaa.js?cachebust=${engineCacheBust}`)).default;
+ioquake3({
+    canvas: canvas,
+    arguments: generatedArguments.trim().split(/\s+/),
+    locateFile: (file) => enginePath + file + (file.toLowerCase().endsWith('.wasm') ? `?cachebust=${engineCacheBust}` : ''),
+    preRun: [async (module) => {
+        runtimeModule = module;
+        module.addRunDependency('wait-for-user-gesture');
+        module.addRunDependency('setup-ioq3-filesystem');
+        try {
+            // Game saves/configs use fs_homepath, which is backed by IndexedDB here.
+            try {
+                module.FS.mkdirTree('/persistent');
+                module.FS.mount(module.IDBFS, {autoPersist: true}, '/persistent');
+                await new Promise((resolve, reject) => {
+                    module.FS.syncfs(true, error => error ? reject(error) : resolve());
+                });
+                persistentStorageEnabled = true;
+            } catch (error) {
+                persistentStorageEnabled = false;
+                console.warn('Persistent browser saves could not be loaded; this session will use temporary storage.', error);
+            }
+            updateMouseLockPrompt();
+
+            const config = await configPromise;
+            const gamedirs = [com_basegame,fs_basegame,fs_game];
+            for (let g = 0; g < gamedirs.length; g++) {
+                const gamedir = gamedirs[g];
+                if (gamedir === '') {
+                    continue;
+                }
+                if (config[gamedir] === null
+                 || config[gamedir].files === null) {
+                    console.warn(`Game directory '${gamedir}' cannot be used. It must have files listed in ${configFilename}.`);
+                    continue;
+                }
+                const files = config[gamedir].files;
+                for (const file of files) {
+                    const fileURL = new URL(file.src, dataURL);
+                    if (fileURL.pathname.toLowerCase().endsWith('.wasm')) {
+                        fileURL.searchParams.set('cachebust', String(Date.now()));
+                    }
+                    if (file.audioPack) {
+                        fileURL.searchParams.set('cachebust', String(Date.now()));
+                    }
+                    const response = await fetch(fileURL);
+                    if (!response.ok) {
+                        if (file.audioPack) {
+                            assetDownload.hidden = false;
+                            assetDownloadLabel.textContent = `Game audio download failed (${response.status}).`;
+                            console.error(`Could not load game audio pack: ${response.status} ${response.statusText}`);
+                        }
+                        continue;
+                    }
+                    const name = fileURL.pathname.match(/[^/]+$/)[0];
+                    const dir = file.dst;
+                    module.FS.mkdirTree(dir);
+                    const destination = `${dir}/${name}`;
+                    if (file.audioPack && response.body?.getReader) {
+                        const total = Number(response.headers.get('Content-Length')) || 0;
+                        const reader = response.body.getReader();
+                        const output = module.FS.open(destination, 'w');
+                        let loaded = 0;
+                        updateAssetProgress(loaded, total);
+                        try {
+                            for (;;) {
+                                const chunk = await reader.read();
+                                if (chunk.done) break;
+                                module.FS.write(output, chunk.value, 0, chunk.value.length, loaded);
+                                loaded += chunk.value.length;
+                                updateAssetProgress(loaded, total);
+                            }
+                            module.FS.close(output);
+                        } catch (error) {
+                            module.FS.close(output);
+                            try { module.FS.unlink(destination); } catch (_) {}
+                            throw error;
+                        }
+                        assetDownloadLabel.textContent = `Game audio ready (${(loaded / 1048576).toFixed(0)} MB)`;
+                        assetProgress.max = 100;
+                        assetProgress.value = 100;
+                        window.setTimeout(() => { assetDownload.hidden = true; }, 2500);
+                    } else {
+                        const data = await response.arrayBuffer();
+                        module.FS.writeFile(destination, new Uint8Array(data));
+                    }
+                }
+            }
+        } finally {
+            module.removeRunDependency('setup-ioq3-filesystem');
+            if (startRequested && waitingForGesture) {
+                waitingForGesture = false;
+                module.removeRunDependency('wait-for-user-gesture');
+            }
+        }
+    }],
+});
+</script>

@@ -6,6 +6,11 @@ build*
 /baseq3
 /main/
 
+# Generated per-machine launcher files. The small prebuilt engine in
+# web-client/ is tracked; these files contain or point to local game data.
+/web-client/openmohaa-config.json
+/web-client/sound.pk3
+
 # OS X
 ####################
 .Spotlight-V100/

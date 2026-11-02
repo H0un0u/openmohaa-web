@@ -1,5 +1,5 @@
 <!DOCTYPE html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>@CLIENT_NAME@ Emscripten demo</title>
+<title>OpenMoHAA Web Port</title>
 <style>
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: rgb(0, 0, 0); display:flex; align-items: center; justify-content: center; }
 canvas { position: relative; z-index: 0; max-width: 100%; max-height: 100%; min-width: 100%; min-height: 100%; object-fit: contain; }
@@ -44,7 +44,7 @@ let dataPath = './';
 // Path or URL for config file that specifies the files to load for each fs_game.
 let configFilename = `./${CLIENT_NAME}-config.json`;
 
-if (window.location.protocol === 'file:') throw new Error(`Unfortunately browser security restrictions prevent loading wasm from a file: URL. This file must be loaded from a web server. The easiest way to do this is probably to use Python\'s built-in web server by running \`python3 -m http.server\` in the top level source directory and then navigate to http://localhost:8000/build/debug-emscripten-wasm32/${CLIENT_NAME}.html`);
+if (window.location.protocol === 'file:') throw new Error('This game needs a local web server. Run Run Web Port.bat from the project folder, then use the browser tab it opens.');
 
 // First set up the command line arguments and the Emscripten filesystem.
 const urlParams = new URLSearchParams(window.location.search);
