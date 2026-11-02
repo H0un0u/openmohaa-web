@@ -49,7 +49,6 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 #define QGL_1_1_PROCS \
 	GLE(void, BindTexture, GLenum target, GLuint texture) \
 	GLE(void, BlendFunc, GLenum sfactor, GLenum dfactor) \
-	GLE(void, CallList, GLuint list) \
 	GLE(void, ClearColor, GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha) \
 	GLE(void, Clear, GLbitfield mask) \
 	GLE(void, ClearStencil, GLint s) \
@@ -62,21 +61,15 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 	GLE(void, Disable, GLenum cap) \
 	GLE(void, DrawArrays, GLenum mode, GLint first, GLsizei count) \
 	GLE(void, DrawElements, GLenum mode, GLsizei count, GLenum type, const GLvoid *indices) \
-	GLE(void, DrawPixels, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels) \
 	GLE(void, Enable, GLenum cap) \
 	GLE(void, Finish, void) \
 	GLE(void, Flush, void) \
-	GLE(void, Fogf, GLenum pname, GLfloat param) \
-	GLE(void, Fogfv, GLenum pname, const GLfloat *params) \
-	GLE(void, Fogi, GLenum pname, GLint param) \
 	GLE(void, GenTextures, GLsizei n, GLuint *textures ) \
 	GLE(void, GetBooleanv, GLenum pname, GLboolean *params) \
 	GLE(GLenum, GetError, void) \
 	GLE(void, GetIntegerv, GLenum pname, GLint *params) \
 	GLE(const GLubyte *, GetString, GLenum name) \
-	GLE(void, LineStipple, GLint factor, GLushort pattern) \
 	GLE(void, LineWidth, GLfloat width) \
-	GLE(void, PixelZoom, GLfloat xfactor, GLfloat yfactor) \
 	GLE(void, PolygonOffset, GLfloat factor, GLfloat units) \
 	GLE(void, ReadPixels, GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid *pixels) \
 	GLE(void, Scissor, GLint x, GLint y, GLsizei width, GLsizei height) \
@@ -87,7 +80,6 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 	GLE(void, TexParameterf, GLenum target, GLenum pname, GLfloat param) \
 	GLE(void, TexParameteri, GLenum target, GLenum pname, GLint param) \
 	GLE(void, TexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels) \
-	GLE(void, Translatef, GLfloat x, GLfloat y, GLfloat z) \
 	GLE(void, Viewport, GLint x, GLint y, GLsizei width, GLsizei height) \
 
 // OpenGL 1.0/1.1 and OpenGL ES 1.x but not OpenGL 3.2 core profile
@@ -109,10 +101,18 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 
 // OpenGL 1.0/1.1 and 3.2 core profile but not OpenGL ES 1.x
 #define QGL_DESKTOP_1_1_PROCS \
+	GLE(void, CallList, GLuint list) \
 	GLE(void, ClearDepth, GLclampd depth) \
 	GLE(void, DepthRange, GLclampd near_val, GLclampd far_val) \
 	GLE(void, DrawBuffer, GLenum mode) \
+	GLE(void, DrawPixels, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels) \
+	GLE(void, Fogf, GLenum pname, GLfloat param) \
+	GLE(void, Fogfv, GLenum pname, const GLfloat *params) \
+	GLE(void, Fogi, GLenum pname, GLint param) \
+	GLE(void, LineStipple, GLint factor, GLushort pattern) \
+	GLE(void, PixelZoom, GLfloat xfactor, GLfloat yfactor) \
 	GLE(void, PolygonMode, GLenum face, GLenum mode) \
+	GLE(void, Translatef, GLfloat x, GLfloat y, GLfloat z) \
 
 // OpenGL 1.0/1.1 but not OpenGL 3.2 core profile or OpenGL ES 1.x
 #define QGL_DESKTOP_1_1_FIXED_FUNCTION_PROCS \

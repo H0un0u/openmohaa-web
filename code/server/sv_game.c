@@ -1594,8 +1594,11 @@ void SV_ShutdownGameProgs( void ) {
 	ge->Shutdown();
 	Sys_UnloadGame();
 
-	// Free all memory allocated by the game module
+	// Emscripten side-module globals survive map changes. Keep their tagged
+	// allocations valid so the next InitGame can clear/reuse persistent tables.
+#ifndef __EMSCRIPTEN__
 	Z_FreeTags(TAG_GAME);
+#endif
 
 	ge = NULL;
 }

@@ -77,6 +77,12 @@ int DisableListenerNotify = 0;
 bool Listener::EventSystemStarted = false;
 bool Listener::ProcessingEvents = false;
 
+#ifdef __EMSCRIPTEN__
+// The browser keeps the game and client-game side modules resident across map
+// changes, so their static Event and ClassDef registrations are built once.
+static bool EventDefinitionsLoaded = false;
+#endif
+
 Event EV_Listener_CancelFor
 (
     "cancelFor",
@@ -564,12 +570,26 @@ void L_InitEvents(void)
     g_watch      = LISTENER_Cvar_Get("g_watch", "0", 0);
     g_eventstats = LISTENER_Cvar_Get("g_eventstats", "0", 0);
 
+#ifdef __EMSCRIPTEN__
+    if (!EventDefinitionsLoaded) {
+        Event::LoadEvents();
+        ClassDef::BuildEventResponses();
+        LL_Reset(&Event::EventQueue, next, prev);
+        L_ClearEventList();
+        EventDefinitionsLoaded = true;
+    } else {
+        // L_ShutdownEvents already cleared the per-map queue and allocator.
+        // Rebuilding response tables here can dereference stale registrations.
+        LL_Reset(&Event::EventQueue, next, prev);
+    }
+#else
     Event::LoadEvents();
     ClassDef::BuildEventResponses();
 
     LL_Reset(&Event::EventQueue, next, prev);
 
     L_ClearEventList();
+#endif
     Listener::EventSystemStarted = true;
 }
 
@@ -616,13 +636,19 @@ void L_ShutdownEvents(void)
 
     L_ClearEventList();
 
+#ifndef __EMSCRIPTEN__
+    // The browser keeps this game side-module loaded across map changes, so
+    // its static Event objects and their registration nodes are not rebuilt.
+    // Keep the static command definitions alive with those objects; only the
+    // per-map queue above is cleared.
     Event::commandList.clear();
     Event::eventDefList.clear();
-#ifdef WITH_SCRIPT_ENGINE
+#    ifdef WITH_SCRIPT_ENGINE
     Event::normalCommandList.clear();
     Event::returnCommandList.clear();
     Event::getterCommandList.clear();
     Event::setterCommandList.clear();
+#    endif
 #endif
 
     Listener::EventSystemStarted = false;

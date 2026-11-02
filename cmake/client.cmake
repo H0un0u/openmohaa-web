@@ -117,6 +117,26 @@ target_link_options(            ${CLIENT_BINARY} PRIVATE ${CLIENT_LINK_OPTIONS})
 
 set_output_dirs(${CLIENT_BINARY})
 
+if(EMSCRIPTEN AND NOT EMSCRIPTEN_PRELOAD_FILE)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    file(GLOB_RECURSE WEB_AUDIO_FILES CONFIGURE_DEPENDS
+        LIST_DIRECTORIES false "${CMAKE_SOURCE_DIR}/${BASEGAME}/sound/*")
+    file(GLOB WEB_GAME_PACKS CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/${BASEGAME}/*.pk3")
+    if(WEB_AUDIO_FILES)
+        set(WEB_AUDIO_PACK "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/sound.pk3")
+        add_custom_command(OUTPUT "${WEB_AUDIO_PACK}"
+            COMMAND "${Python3_EXECUTABLE}" "${SOURCE_DIR}/web/package_audio.py"
+                --game-dir "${CMAKE_SOURCE_DIR}/${BASEGAME}"
+                --output "${WEB_AUDIO_PACK}"
+            DEPENDS "${SOURCE_DIR}/web/package_audio.py" ${WEB_AUDIO_FILES} ${WEB_GAME_PACKS}
+            VERBATIM)
+        add_custom_target(web_audio_pack DEPENDS "${WEB_AUDIO_PACK}")
+        add_dependencies(${CLIENT_BINARY} web_audio_pack)
+        set(WEB_AUDIO_PACK_ENABLED TRUE)
+    endif()
+endif()
+
 if(NOT USE_RENDERER_DLOPEN)
     target_sources(${CLIENT_BINARY} PRIVATE
         # These are never simultaneously populated

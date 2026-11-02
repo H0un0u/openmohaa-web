@@ -3748,15 +3748,15 @@ void CL_Init( void ) {
 
 	SCR_Init ();
 
-	Cbuf_Execute (0);
-
-	Cvar_Set( "cl_running", "1" );
-
 #if defined(NO_MODERN_DMA) && NO_MODERN_DMA
 	S_Init2();
 #else
 	S_Init(qtrue);
 #endif
+
+	Cbuf_Execute (0);
+
+	Cvar_Set( "cl_running", "1" );
 
 	CL_GenerateQKey();
 	Cvar_Get( "cl_guid", "", CVAR_USERINFO | CVAR_ROM );

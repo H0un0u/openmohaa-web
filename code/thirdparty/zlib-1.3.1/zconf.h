@@ -486,7 +486,12 @@ typedef uLong FAR uLongf;
 #      include <unixio.h>       /* for off_t */
 #    endif
 #    ifndef z_off_t
-#      define z_off_t off_t
+#      if defined(__EMSCRIPTEN__)
+/* Keep ZIP offsets ABI-compatible across the C and C++ WebAssembly builds. */
+#        define z_off_t long
+#      else
+#        define z_off_t off_t
+#      endif
 #    endif
 #  endif
 #endif

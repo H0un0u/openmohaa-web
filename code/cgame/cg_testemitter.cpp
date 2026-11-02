@@ -139,6 +139,18 @@ spawnthing_t           *pCurrSpawnthing;
 
 #define MAX_TESTEMITTERS_SAVE 32
 
+#ifdef __EMSCRIPTEN__
+// These snapshots are fixed-size cvar text. Avoid per-entry C++ heap allocations
+// in the WebAssembly client module's test-effect editor state.
+struct cgame_saved_cvar_t {
+    char value[MAX_STRING_CHARS];
+
+    void operator=(const char *text) { Q_strncpyz(value, text, sizeof(value)); }
+    const char *c_str() const { return value; }
+};
+#define str cgame_saved_cvar_t
+#endif
+
 str cg_te_alphaG[MAX_TESTEMITTERS_SAVE];
 str cg_te_dietouchG[MAX_TESTEMITTERS_SAVE];
 str cg_te_bouncefactorG[MAX_TESTEMITTERS_SAVE];
@@ -224,6 +236,10 @@ str cg_te_alignstretch_scaleG[MAX_TESTEMITTERS_SAVE];
 str cg_te_command_timeG[MAX_TESTEMITTERS_SAVE];
 str cg_te_singlelinecommandG[MAX_TESTEMITTERS_SAVE];
 str cg_te_tagG[MAX_TESTEMITTERS_SAVE];
+
+#ifdef __EMSCRIPTEN__
+#undef str
+#endif
 
 spawnthing_t *testspawnthing = NULL;
 

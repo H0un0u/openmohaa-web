@@ -548,7 +548,12 @@ void CL_ShutdownCGame( void ) {
 		re.FreeModels();
 	}
 
+#ifndef __EMSCRIPTEN__
+	// Emscripten keeps cgame.wasm resident across map changes, so its static
+	// pointers still refer to these allocations on the next CG_Init. Freeing
+	// the tag here leaves those pointers dangling (for example CG_InitMarks).
 	Z_FreeTags( TAG_CGAME );
+#endif
 }
 
 static int	FloatAsInt( float f ) {

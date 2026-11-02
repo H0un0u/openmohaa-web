@@ -374,8 +374,13 @@ static bool S_OPENAL_InitContext()
 
     attrlist[0] = ALC_FREQUENCY;
     attrlist[1] = al_frequency;
+#ifndef __EMSCRIPTEN__
     attrlist[2] = ALC_SYNC;
     attrlist[3] = qfalse;
+#else
+    // Emscripten's OpenAL port rejects ALC_SYNC in alcCreateContext.
+    attrlist[2] = 0;
+#endif
 
     s_speaker_type->modified = false;
 

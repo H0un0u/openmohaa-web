@@ -223,11 +223,17 @@ void Sys_UnloadGame(void)
 {
     Com_Printf("------ Unloading Game ------\n");
 
+#ifdef __EMSCRIPTEN__
+    // dlclose does not reclaim a side module's static data in Emscripten.
+    // Keep the game module resident across map changes and reuse its API.
+    return;
+#else
     if (game_library) {
         Sys_UnloadLibrary(game_library);
     }
 
     game_library = NULL;
+#endif
 }
 
 /*
@@ -240,12 +246,17 @@ void* Sys_GetGameAPI(void* parms)
     void* (*GetGameAPI) (void*);
     const char* gamename = "game" DLL_SUFFIX DLL_EXT;
 
+#ifdef __EMSCRIPTEN__
+    if (!game_library) {
+        game_library = Sys_LoadDll(gamename, qfalse);
+    }
+#else
     if (game_library)
         Com_Error(ERR_FATAL, "Sys_GetGameAPI without calling Sys_UnloadGame");
 
     game_library = Sys_LoadDll(gamename, qfalse);
+#endif
 
-    //Still couldn't find it.
     if (!game_library) {
         Com_Printf("Sys_GetGameAPI(%s) failed: \"%s\"\n", gamename, Sys_LibraryError());
         Com_Error(ERR_FATAL, "Couldn't load game");
@@ -272,11 +283,16 @@ void Sys_UnloadCGame(void)
 {
     Com_Printf("------ Unloading ClientGame ------\n");
 
+#ifdef __EMSCRIPTEN__
+    // Keep this side module resident for the same reason as game.wasm.
+    return;
+#else
     if (cgame_library) {
         Sys_UnloadLibrary(cgame_library);
     }
 
     cgame_library = NULL;
+#endif
 }
 
 /*
@@ -286,22 +302,27 @@ Sys_GetCGameAPI
 */
 void* Sys_GetCGameAPI(void* parms)
 {
-    void* (*GetCGameAPI) (void*);
+    void* (*GetCGameAPI) (void);
     const char* gamename = "cgame" DLL_SUFFIX DLL_EXT;
 
+#ifdef __EMSCRIPTEN__
+    if (!cgame_library) {
+        cgame_library = Sys_LoadDll(gamename, qfalse);
+    }
+#else
     if (cgame_library)
         Com_Error(ERR_FATAL, "Sys_GetCGameAPI without calling Sys_UnloadCGame");
 
     cgame_library = Sys_LoadDll(gamename, qfalse);
+#endif
 
-    //Still couldn't find it.
     if (!cgame_library) {
         Com_Printf("Sys_GetCGameAPI(%s) failed: \"%s\"\n", gamename, Sys_LibraryError());
         Com_Error(ERR_FATAL, "Couldn't load game");
     }
 
     Com_Printf("Sys_GetCGameAPI(%s): succeeded ...\n", gamename);
-    GetCGameAPI = (void* (*)(void*))Sys_LoadFunction(cgame_library, "GetCGameAPI");
+    GetCGameAPI = (void* (*)(void))Sys_LoadFunction(cgame_library, "GetCGameAPI");
 
     if (!GetCGameAPI)
     {
@@ -309,7 +330,8 @@ void* Sys_GetCGameAPI(void* parms)
         return NULL;
     }
 
-    return GetCGameAPI(parms);
+    (void)parms;
+    return GetCGameAPI();
 }
 
 void VM_Forced_Unload_Start(void) {

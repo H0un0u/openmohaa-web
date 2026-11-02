@@ -30,6 +30,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef __EMSCRIPTEN__
+#    include <emscripten.h>
+#endif
+
 #include "../client/client.h"
 #include "../sys/sys_local.h"
 
@@ -60,6 +64,15 @@ static int in_eventTime = 0;
 static SDL_Window *SDL_window = NULL;
 
 #define CTRL(a) ((a)-'a'+1)
+
+static qboolean IN_PointerLockBlocked(void)
+{
+#ifdef __EMSCRIPTEN__
+    return EM_ASM_INT({ return window.openmohaaPointerLockBlocked === true; }) ? qtrue : qfalse;
+#else
+    return qfalse;
+#endif
+}
 
 /*
 ===============
@@ -353,13 +366,22 @@ IN_ActivateMouse
 */
 static void IN_ActivateMouse( qboolean isFullscreen )
 {
+	qboolean pointerLockBlocked = IN_PointerLockBlocked();
+
 	if (!mouseAvailable || !SDL_WasInit( SDL_INIT_VIDEO ) )
 		return;
 
 	if( !mouseActive )
 	{
-		SDL_SetRelativeMouseMode( SDL_TRUE );
-		SDL_SetWindowGrab( SDL_window, SDL_TRUE );
+		if( pointerLockBlocked ) {
+			// Embedded browsers may reject pointer lock. Keep absolute mouse events
+			// enabled so menus and drag-to-look still work with the visible cursor.
+			SDL_SetRelativeMouseMode( SDL_FALSE );
+			SDL_SetWindowGrab( SDL_window, SDL_FALSE );
+		} else {
+			SDL_SetRelativeMouseMode( SDL_TRUE );
+			SDL_SetWindowGrab( SDL_window, SDL_TRUE );
+		}
 
 		IN_GobbleMotionEvents( );
 	}
@@ -369,7 +391,7 @@ static void IN_ActivateMouse( qboolean isFullscreen )
 	{
 		if( in_nograb->modified || !mouseActive )
 		{
-			if( in_nograb->integer ) {
+			if( in_nograb->integer || pointerLockBlocked ) {
 				SDL_SetRelativeMouseMode( SDL_FALSE );
 				SDL_SetWindowGrab( SDL_window, SDL_FALSE );
 			} else {
@@ -1121,6 +1143,18 @@ static void IN_ProcessEvents( void )
 				break;
 
 			case SDL_MOUSEMOTION:
+#ifdef __EMSCRIPTEN__
+				if( Key_GetCatcher( ) & KEYCATCH_UI ) {
+					int windowWidth, windowHeight;
+					SDL_GetWindowSize( SDL_window, &windowWidth, &windowHeight );
+					if( windowWidth > 0 && windowHeight > 0 ) {
+						CL_SetMousePos(
+							 e.motion.x * cls.glconfig.vidWidth / windowWidth,
+							 e.motion.y * cls.glconfig.vidHeight / windowHeight
+						);
+					}
+				}
+#endif
 				if( mouseActive )
 				{
 					if( !e.motion.xrel && !e.motion.yrel )
