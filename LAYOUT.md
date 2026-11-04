@@ -18,7 +18,8 @@
 | code/sys             | Main application system                                          |
 | code/tiki            | Complete TIKI engine                                             |
 | code/uilib           | UI library (Ubertools stuff)                                     |
+| code/web             | WebAssembly/browser port support (launcher, client page, audio packager) |
 | code/{win32,unix}    | Platform-specific code                                           |
-| docker               | Docker files, for compiling on various linux versions            |
-| docs                 | Documentation stuff                                              |
+| container/           | Container files, for compiling on various linux versions      |
+| docs/                | Documentation stuff                                              |
 | misc/                | Project stuff, definition files and various resources stuff.     |
