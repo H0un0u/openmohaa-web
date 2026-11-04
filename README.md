@@ -24,4 +24,5 @@ Original Medal of Honor game assets are not included. Provide game data from a c
 
 - Upstream source: [openmoh/openmohaa](https://github.com/openmoh/openmohaa)
 - Upstream documentation: [openmoh.github.io/openmohaa](https://openmoh.github.io/openmohaa)
+- Upstream base: snapshot of openmoh/openmohaa at commit [a2f3401](https://github.com/openmoh/openmohaa/commit/a2f340195975f4f042e28a60b62561dd9a0b2700) (April 2026); the web-port changes sit on top of that base
 - See [COPYING.txt](COPYING.txt) for the license and [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance.
